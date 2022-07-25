@@ -1,3 +1,5 @@
+// package OrigScan;
+
 import java.util.List;
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -10,17 +12,15 @@ public class Graph {
 
 	private List<Node> vertices;
 
-	public Graph() {
-		vertices = new ArrayList<>();
-	}
-
 	public Graph(ArrayList<Node> n) {
 		vertices = new ArrayList<>(n);
 	}
 
 	private void colorClear() {
 		for (int i = 0; i < vertices.size(); ++i) {
-			vertices.get(i).color = "";
+			if (!vertices.get(i).boundary) {
+				vertices.get(i).color = "";
+			}
 		}
 	}
 
@@ -40,12 +40,14 @@ public class Graph {
 			Node temp = q.poll();
 			for (int i = 0; i < temp.edges.size(); ++i) {
 				Node examinee = temp.edges.get(i).end;
-				if (examinee.color.equals("")) {
-					examinee.color = temp.color.equals("r") ? "b" : "r";
-					q.add(examinee);
-				} else if (examinee.color.equals(temp.color)) {
-					System.out.println("Pattern is not two colorable");
-					return;
+				if (!examinee.boundary) {
+					if (examinee.color.equals("")) {
+						examinee.color = temp.color.equals("r") ? "b" : "r";
+						q.add(examinee);
+					} else if (examinee.color.equals(temp.color)) {
+						System.out.println("Pattern is not two colorable");
+						return;
+					}
 				}
 			}
 		}
@@ -53,9 +55,12 @@ public class Graph {
 
 	private boolean isTwoColorable() {
 		for (int i = 0; i < vertices.size(); ++i) {
-			for (int j = 0; j < vertices.get(i).edges.size(); ++j) {
-				if (vertices.get(i).color.equals(vertices.get(i).edges.get(j).end.color)) {
-					return false;
+			if (!vertices.get(i).boundary) {
+				for (int j = 0; j < vertices.get(i).edges.size(); ++j) {
+					if (!vertices.get(i).edges.get(j).end.boundary
+							&& vertices.get(i).color.equals(vertices.get(i).edges.get(j).end.color)) {
+						return false;
+					}
 				}
 			}
 		}
@@ -64,17 +69,20 @@ public class Graph {
 
 	private boolean checkMaekawaTheorem() {
 		for (int i = 0; i < vertices.size(); ++i) {
-			int mCount = 0;
-			int vCount = 0;
-			for (int j = 0; j < vertices.get(i).edges.size(); ++j) {
-				if (vertices.get(i).edges.get(j).foldType) {
-					++mCount;
-				} else {
-					++vCount;
+			if (!vertices.get(i).boundary) {
+				int mCount = 0;
+				int vCount = 0;
+				for (int j = 0; j < vertices.get(i).edges.size(); ++j) {
+					if (vertices.get(i).edges.get(j).foldType) {
+						++mCount;
+					} else {
+						++vCount;
+					}
+
 				}
-			}
-			if (Math.abs(mCount - vCount) != 2) {
-				return false;
+				if (Math.abs(mCount - vCount) != 2) {
+					return false;
+				}
 			}
 		}
 		return true;
@@ -82,34 +90,56 @@ public class Graph {
 
 	private boolean checkKawasakiTheorem() {
 		for (int i = 0; i < vertices.size(); ++i) {
-			if (vertices.get(i).edges.size() % 2 != 0) {
-				return false;
-			}
-			int odd = 0;
-			int even = 0;
-			for (int j = 0; j < vertices.get(i).edges.size(); ++j) {
-				if (j % 2 == 0) {
-					even += vertices.get(i).edges.get(j).angle;
-				} else {
-					odd += vertices.get(i).edges.get(j).angle;
+			if (!vertices.get(i).boundary) {
+				if (vertices.get(i).edges.size() % 2 != 0) {
+					return false;
 				}
-			}
-			if (odd != KAWASAKI_ANGLE || even != KAWASAKI_ANGLE) {
-				return false;
+				int odd = 0;
+				int even = 0;
+				for (int j = 0; j < vertices.get(i).edges.size(); ++j) {
+					if (j % 2 == 0) {
+						even += vertices.get(i).edges.get(j).angle;
+					} else {
+						odd += vertices.get(i).edges.get(j).angle;
+					}
+				}
+				if (odd != KAWASAKI_ANGLE || even != KAWASAKI_ANGLE) {
+					return false;
+				}
 			}
 		}
 		return true;
 	}
 
+	// input angles in ccw for this to work
 	private boolean checkBigLittleBigLemma() {
 		for (int i = 0; i < vertices.size(); ++i) {
-			for (int j = 1; j < vertices.get(i).edges.size() - 1; ++j) {
-				if (vertices.get(i).edges.get(j).angle < vertices.get(i).edges.get(j + 1).angle
-						&& vertices.get(i).edges.get(j).angle < vertices.get(i).edges.get(j - 1).angle) {
-					if (vertices.get(i).edges.get(j - 1).foldType == vertices.get(i).edges.get(j + 1).foldType) {
+			if (!vertices.get(i).boundary) {
+				// accommodate circular nature -> edge cases
+				if (vertices.get(i).edges.size() > 2) {
+					// j = 0 case
+					if (!bigLittleBigLemmaHelper(i, 0, vertices.get(i).edges.size() - 1, 1))
 						return false;
-					}
+					// j = n - 1 case
+					if (!bigLittleBigLemmaHelper(i, vertices.get(i).edges.size() - 1, vertices.get(i).edges.size() - 2,
+							0))
+						return false;
 				}
+				// general case
+				for (int j = 1; j < vertices.get(i).edges.size() - 1; ++j) {
+					if (!bigLittleBigLemmaHelper(i, j, j - 1, j + 1))
+						return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	private boolean bigLittleBigLemmaHelper(int gIdx, int curr, int before, int after) {
+		if (vertices.get(gIdx).edges.get(curr).angle < vertices.get(gIdx).edges.get(after).angle
+				&& vertices.get(gIdx).edges.get(curr).angle < vertices.get(gIdx).edges.get(before).angle) {
+			if (vertices.get(gIdx).edges.get(curr).foldType == vertices.get(gIdx).edges.get(after).foldType) {
+				return false;
 			}
 		}
 		return true;
@@ -136,16 +166,21 @@ public class Graph {
 		return true;
 	}
 
-	private static class Node {
+	public static class Node {
 		private List<Edge> edges;
 		private String color;
+		private boolean boundary;
 
-		public Node(List<Edge> e) {
-			edges = new ArrayList<>(e);
+		public Node(List<Edge> e, boolean b) {
+			if (e != null)
+				edges = new ArrayList<>(e);
+			else
+				edges = null;
+			boundary = b;
 		}
 	}
 
-	private static class Edge {
+	public static class Edge {
 		private Node end;
 		private boolean foldType;
 		private int angle;
